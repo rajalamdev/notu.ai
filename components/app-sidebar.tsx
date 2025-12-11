@@ -12,10 +12,12 @@ import {
   IconHelp,
   IconSearch,
 } from "@tabler/icons-react"
+import { useSession } from "next-auth/react"
 
 import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
+import { NavTodolist } from "@/components/nav-todolist"
 import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
@@ -29,11 +31,6 @@ import {
 import Image from "next/image"
 
 const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
   navMain: [
     { title: "Beranda", url: "/dashboard", icon: IconDashboard },
     { title: "Meeting", url: "/dashboard/meeting", icon: IconCalendarTime },
@@ -54,27 +51,28 @@ const data = {
       url: "#",
       icon: IconHelp,
     },
-    // {
-    //   title: "Search",
-    //   url: "#",
-    //   icon: IconSearch,
-    // },
   ],
   documents: [
       {
         name: "Settings",
         url: "/dashboard/settings",
-        // icon: IconSettings,
       },
       {
         name: "Get Help",
         url: "#",
-        // icon: IconHelp,
       },
   ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { data: session } = useSession()
+
+  const user = {
+    name: session?.user?.name || "Guest",
+    email: session?.user?.email || "",
+    avatar: session?.user?.image || "",
+  }
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -94,11 +92,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavDocuments items={data.documents} />
+        <NavTodolist />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   )

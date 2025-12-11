@@ -5,6 +5,7 @@
 
 @theme inline {
   --color-background: var(--background);
+  --color-background-2: var(--background-2);
   --color-foreground: var(--foreground);
   --font-dmsans: var(--font-dmsans);
   --font-mono: var(--font-geist-mono);
@@ -46,6 +47,7 @@
 :root {
   --radius: 0.625rem;
   --background: oklch(0.9865 0.0066 286.28); /* background */
+  --background-2: oklch(1 0 0);
   --foreground: oklch(0.1672 0.0745 283.65); /* text heading */
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.1672 0.0745 283.65); 
@@ -62,7 +64,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.8914 0 0); /* border */
   --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --ring: oklch(0.8914 0 0);;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);

@@ -48,7 +48,7 @@ type Task = {
 
 type ColumnId = "todo" | "inProgress" | "done"
 
-export default function KanbanPage() {
+export default function TodolistDetailPage() {
   const initialTodo: Task[] = [
     {
       id: "1",
@@ -185,13 +185,15 @@ export default function KanbanPage() {
   }, [])
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
-  )
+  useSensor(PointerSensor, {
+    activationConstraint: { distance: 8 },
+  })
+)
 
   // Priority removed in design; helpers kept stubbed for compatibility if needed in future
 
-  const TaskCard = ({ task, showProgress = false }: { task: Task, showProgress?: boolean }) => (
-    <Card className="mb-3 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing md:mb-4" onClick={() => openEdit(task)}>
+  const TaskCard = ({ task, showProgress = false, className = "" }: { task: Task, showProgress?: boolean, className?: string }) => (
+    <Card className={`mb-3 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing md:mb-4 ${className}`} onClick={() => openEdit(task)}>
       <CardContent className="p-3 md:p-4">
         <div className="space-y-3">
           <div className="flex items-start justify-between">
@@ -250,15 +252,18 @@ export default function KanbanPage() {
   )
 
   const SortableCard = ({ task, showProgress }: { task: Task; showProgress?: boolean }) => {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id: task.id })
     const style = {
       transform: CSS.Transform.toString(transform),
-      transition: transition || "transform 200ms cubic-bezier(0.2, 0, 0, 1)",
-      opacity: isDragging ? 0.5 : 1,
+      transition: "all 200ms cubic-bezier(0.2, 0, 0, 1)",
     }
     return (
       <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-        <TaskCard task={task} showProgress={showProgress} />
+        <TaskCard 
+          task={task} 
+          showProgress={showProgress}
+          className={isDragging ? 'bg-accent/10 border-2 border-accent opacity-30' : ''}
+        />
       </div>
     )
   }
@@ -403,7 +408,7 @@ export default function KanbanPage() {
     <div className="mt-6 space-y-4">
       <div className="space-y-2">
         <Label htmlFor="title">Title</Label>
-        <Input id="title" value={state.title} onChange={(e) => setState((s: any) => ({ ...s, title: e.target.value }))} placeholder="Task title" />
+        <Input onClick={(e) => e.stopPropagation()} id="title" value={state.title} onChange={(e) => setState((s: any) => ({ ...s, title: e.target.value }))} placeholder="Task title" />
       </div>
       <div className="space-y-2">
         <Label htmlFor="desc">Description</Label>
@@ -431,7 +436,7 @@ export default function KanbanPage() {
                 <Dialog.Content className="fixed left-1/2 top-1/2 w-[92vw] z-[60] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-4 shadow-xl">
                   <Dialog.Title className="text-sm font-semibold">Members</Dialog.Title>
                   <div className="mt-3 space-y-2">
-                    <Input placeholder="Search members" className="h-8 text-xs" />
+                    <Input onClick={(e) => e.stopPropagation()} placeholder="Search members" className="h-8 text-xs" />
                     <div className="space-y-1">
                       {invitedMembers.map((m) => (
                         <button key={m} type="button" className={`flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-accent hover:text-white`} onClick={() => setState((s: any) => ({ ...s, assignee: m }))}>
@@ -470,7 +475,7 @@ export default function KanbanPage() {
                 <Dialog.Content className="fixed left-1/2 top-1/2 w-[92vw] z-[60] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-4 shadow-xl">
                   <Dialog.Title className="text-sm font-semibold">Labels</Dialog.Title>
                   <div className="mt-3 space-y-2">
-                    <Input placeholder="Search labels..." className="h-8 text-xs" />
+                    <Input onClick={(e) => e.stopPropagation()} placeholder="Search labels..." className="h-8 text-xs" />
                     <div className="space-y-2">
                       {labels.map((lbl) => {
                         const active = (state.labelIds || []).includes(lbl.id)
@@ -487,7 +492,7 @@ export default function KanbanPage() {
                       })}
                     </div>
                     <div className="mt-3 flex gap-2">
-                      <Input placeholder="New label name" className="h-8 text-xs" id="new-label-name" />
+                      <Input onClick={(e) => e.stopPropagation()} placeholder="New label name" className="h-8 text-xs" id="new-label-name" />
                       <Button className="h-8 px-3 text-xs" onClick={() => {
                         const input = document.getElementById('new-label-name') as HTMLInputElement | null
                         const name = input?.value?.trim()
@@ -507,7 +512,7 @@ export default function KanbanPage() {
         {/* Due date (single responsive input) */}
         <div className="space-y-2">
           <Label>Due date</Label>
-          <Input type="datetime-local" value={state.dueDate || ""} onChange={(e) => setState((s: any) => ({ ...s, dueDate: e.target.value }))} />
+          <Input onClick={(e) => e.stopPropagation()} type="datetime-local" value={state.dueDate || ""} onChange={(e) => setState((s: any) => ({ ...s, dueDate: e.target.value }))} />
         </div>
       </div>
       {/* Description */}
@@ -572,7 +577,7 @@ export default function KanbanPage() {
               <div className="px-4 lg:px-6">
                 {!mounted ? (
                   <div className="grid gap-6 lg:grid-cols-3">
-                    <div className="space-y-4">
+                    <div className="space-y-4 bg-[#f5f5f5] p-4 rounded-[6px]">
                       <div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -590,7 +595,7 @@ export default function KanbanPage() {
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-4">
+                    <div className="space-y-4 bg-[#f5f5f5] p-4 rounded-[6px]">
                       <div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -608,7 +613,7 @@ export default function KanbanPage() {
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-4">
+                    <div className="space-y-4 bg-[#f5f5f5] p-4 rounded-[6px]">
                       <div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -632,7 +637,7 @@ export default function KanbanPage() {
                   <div className="grid gap-6 lg:grid-cols-3">
                     {/* To Do Column */}
                     <DroppableColumn id="todo">
-                    <div className="space-y-4">
+                    <div className="space-y-4 bg-[#f5f5f5] p-4 rounded-[6px]">
                       <div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -664,7 +669,7 @@ export default function KanbanPage() {
 
                     {/* In Progress Column */}
                     <DroppableColumn id="inProgress">
-                    <div className="space-y-4">
+                    <div className="space-y-4 bg-[#f5f5f5] p-4 rounded-[6px]">
                       <div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -696,7 +701,7 @@ export default function KanbanPage() {
 
                     {/* Done Column */}
                     <DroppableColumn id="done">
-                    <div className="space-y-4">
+                    <div className="space-y-4 bg-[#f5f5f5] p-4 rounded-[6px]">
                       <div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">

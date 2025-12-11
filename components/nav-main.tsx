@@ -26,7 +26,9 @@ export function NavMain({
       <SidebarGroupContent className="flex flex-col gap-2">
         <SidebarMenu>
           {items.map((item) => {
-            const isActive = item.url === "/" ? pathname === "/" : pathname.startsWith(item.url)
+            const isActive = item.url === pathname ||
+              (item.url !== "/dashboard" && pathname.startsWith(item.url)) ||
+              (item.url === "/dashboard" && pathname === "/dashboard")
             return (
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton
