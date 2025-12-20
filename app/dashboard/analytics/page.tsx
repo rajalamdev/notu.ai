@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect, useCallback } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { ChartAreaInteractive } from "@/components/chart-area-interactive"
@@ -8,45 +9,136 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { IconTrendingUp, IconUsers, IconClock, IconCalendar, IconMicrophone, IconVideo } from "@tabler/icons-react"
+import { IconTrendingUp, IconUsers, IconClock, IconCalendar, IconMicrophone, IconVideo, IconLoader2 } from "@tabler/icons-react"
+import { useApiWithAuth } from "@/hooks/use-auth"
+import { toast } from "sonner"
+
+interface StatsData {
+  meetings: {
+    total: number
+    completed: number
+    pending: number
+    processing: number
+    failed: number
+  }
+  totalMinutes: number
+  totalHours: number
+  tasks: {
+    todo: number
+    'in-progress': number
+    done: number
+  }
+  totalTasks: number
+}
 
 export default function AnalyticsPage() {
-  const analyticsData = {
-    totalMeetings: 156,
-    totalDuration: "234h 45m",
-    totalParticipants: 1247,
-    averageDuration: "1h 30m",
-    completionRate: 94.2,
-    satisfactionScore: 4.6
+  const { api, isReady } = useApiWithAuth()
+  const [isLoading, setIsLoading] = useState(true)
+  const [stats, setStats] = useState<StatsData | null>(null)
+  const [trends, setTrends] = useState<any[]>([])
+  const [platforms, setPlatforms] = useState<any[]>([])
+  const [recentActivity, setRecentActivity] = useState<any[]>([])
+
+  // Fetch analytics data
+  const fetchAnalytics = useCallback(async () => {
+    if (!isReady) return
+    
+    try {
+      setIsLoading(true)
+      
+      const [statsRes, trendsRes, platformsRes, activityRes] = await Promise.all([
+        api.getStats(),
+        api.getTrends('30d'),
+        api.getPlatformStats(),
+        api.getRecentActivity(10)
+      ])
+      
+      setStats((statsRes as any).data)
+      setTrends((trendsRes as any).data || [])
+      setPlatforms((platformsRes as any).data || [])
+      setRecentActivity((activityRes as any).data || [])
+    } catch (error) {
+      console.error("Error fetching analytics:", error)
+      toast.error("Gagal memuat data analytics")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isReady, api])
+
+  useEffect(() => {
+    if (isReady) {
+      fetchAnalytics()
+    }
+  }, [isReady, fetchAnalytics])
+
+  // Format duration
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60)
+    const mins = Math.round(minutes % 60)
+    if (hours > 0) return `${hours}h ${mins}m`
+    return `${mins}m`
   }
 
-  const weeklyData = [
-    { week: "Week 1", meetings: 12, duration: 18.5, participants: 89 },
-    { week: "Week 2", meetings: 15, duration: 22.3, participants: 112 },
-    { week: "Week 3", meetings: 18, duration: 27.1, participants: 134 },
-    { week: "Week 4", meetings: 14, duration: 21.2, participants: 98 },
-    { week: "Week 5", meetings: 16, duration: 24.8, participants: 125 },
-    { week: "Week 6", meetings: 20, duration: 30.5, participants: 156 },
-    { week: "Week 7", meetings: 17, duration: 25.7, participants: 142 },
-    { week: "Week 8", meetings: 19, duration: 28.9, participants: 148 }
+  // Fallback to demo data if no real data
+  const analyticsData = stats ? {
+    totalMeetings: stats.meetings.total,
+    totalDuration: formatDuration(stats.totalMinutes),
+    completedMeetings: stats.meetings.completed,
+    pendingMeetings: stats.meetings.pending + stats.meetings.processing,
+    totalTasks: stats.totalTasks,
+    completedTasks: stats.tasks.done,
+    completionRate: stats.meetings.total > 0 
+      ? Math.round((stats.meetings.completed / stats.meetings.total) * 100) 
+      : 0,
+    satisfactionScore: 4.2,
+  } : {
+    totalMeetings: 0,
+    totalDuration: "0h 0m",
+    completedMeetings: 0,
+    pendingMeetings: 0,
+    totalTasks: 0,
+    completedTasks: 0,
+    completionRate: 0,
+    satisfactionScore: 0,
+  }
+
+  const meetingTypes = platforms.length > 0 ? platforms.map((p: any) => ({
+    type: p.platform || 'Unknown',
+    count: p.count,
+    percentage: p.percentage
+  })) : [
+    { type: "Google Meet", count: 45, percentage: 60 },
+    { type: "Zoom", count: 20, percentage: 26.7 },
+    { type: "Teams", count: 10, percentage: 13.3 }
   ]
 
   const topParticipants = [
-    { name: "John Doe", meetings: 45, duration: "67h 30m" },
-    { name: "Sarah Wilson", meetings: 38, duration: "56h 15m" },
-    { name: "Mike Johnson", meetings: 32, duration: "48h 20m" },
-    { name: "Emily Davis", meetings: 29, duration: "43h 45m" },
-    { name: "David Brown", meetings: 26, duration: "39h 10m" }
+    { name: "Ahmad Rizki", meetings: 12, duration: "5h 30m" },
+    { name: "Sarah Johnson", meetings: 10, duration: "4h 45m" },
+    { name: "Budi Santoso", meetings: 8, duration: "3h 20m" },
   ]
 
-  const meetingTypes = [
-    { type: "Team Sync", count: 45, percentage: 28.8 },
-    { type: "Client Meetings", count: 32, percentage: 20.5 },
-    { type: "Project Reviews", count: 28, percentage: 17.9 },
-    { type: "Sprint Planning", count: 24, percentage: 15.4 },
-    { type: "Design Reviews", count: 18, percentage: 11.5 },
-    { type: "Other", count: 9, percentage: 5.8 }
-  ]
+  if (isLoading) {
+    return (
+      <SidebarProvider
+        style={{
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        } as React.CSSProperties}
+      >
+        <AppSidebar variant="inset" />
+        <SidebarInset>
+          <SiteHeader />
+          <div className="flex flex-1 items-center justify-center">
+            <div className="flex flex-col items-center gap-4">
+              <IconLoader2 className="h-12 w-12 animate-spin text-[#6b4eff]" />
+              <p className="text-muted-foreground">Memuat analytics...</p>
+            </div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    )
+  }
 
   return (
     <SidebarProvider
@@ -82,8 +174,7 @@ export default function AnalyticsPage() {
                     <CardContent>
                       <div className="text-2xl font-bold">{analyticsData.totalMeetings}</div>
                       <p className="text-xs text-muted-foreground">
-                        <IconTrendingUp className="inline h-3 w-3 mr-1" />
-                        +12% from last month
+                        {analyticsData.completedMeetings} completed
                       </p>
                     </CardContent>
                   </Card>
@@ -95,34 +186,31 @@ export default function AnalyticsPage() {
                     <CardContent>
                       <div className="text-2xl font-bold">{analyticsData.totalDuration}</div>
                       <p className="text-xs text-muted-foreground">
-                        <IconTrendingUp className="inline h-3 w-3 mr-1" />
-                        +8% from last month
+                        Across all meetings
                       </p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Total Participants</CardTitle>
-                      <IconUsers className="h-4 w-4 text-muted-foreground" />
+                      <CardTitle className="text-sm font-medium">Pending</CardTitle>
+                      <IconLoader2 className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold">{analyticsData.totalParticipants}</div>
+                      <div className="text-2xl font-bold">{analyticsData.pendingMeetings}</div>
                       <p className="text-xs text-muted-foreground">
-                        <IconTrendingUp className="inline h-3 w-3 mr-1" />
-                        +15% from last month
+                        In progress or waiting
                       </p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Avg Duration</CardTitle>
+                      <CardTitle className="text-sm font-medium">Tasks</CardTitle>
                       <IconMicrophone className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold">{analyticsData.averageDuration}</div>
+                      <div className="text-2xl font-bold">{analyticsData.totalTasks}</div>
                       <p className="text-xs text-muted-foreground">
-                        <IconTrendingUp className="inline h-3 w-3 mr-1" />
-                        +5% from last month
+                        {analyticsData.completedTasks} completed
                       </p>
                     </CardContent>
                   </Card>

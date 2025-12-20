@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ChartAreaInteractive } from "@/components/chart-area-interactive"
 import { DataTable } from "@/components/data-table"
@@ -14,11 +14,11 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import MeetingCard from "@/components/custom/MeetingCard"
-import { IconCamera, IconMicrophone, IconFileUpload, IconChartBar, IconSearch, IconDotsVertical, IconChevronRight, IconChevronDown, IconList, IconGrid4x4 } from "@tabler/icons-react"
+import { IconCamera, IconMicrophone, IconFileUpload, IconChartBar, IconSearch, IconDotsVertical, IconChevronRight, IconChevronDown, IconList, IconGrid4x4, IconLoader2 } from "@tabler/icons-react"
 import { OnlineMeetingDialog } from "@/components/dialogs/online-meeting-dialog"
 import { RealtimeMeetingDialog } from "@/components/dialogs/realtime-meeting-dialog"
-
-import data from "./data.json"
+import { useAuth, useApiWithAuth } from "@/hooks/use-auth"
+import { useRouter } from "next/navigation"
 
 const quickActions = [
   {
@@ -47,48 +47,85 @@ const quickActions = [
   },
 ]
 
-  const meetingHistory = [
-    { 
-      id: 1,
-      tag: "#My Meeting",
-      platform: "Google Meet",
-      date: "Senin, 8 September 2025 12:55",
-      title: "Rapat HMIF Periode 2025/2026",
-      description: "Pada rapat ini membahas tentang pengkajian ad/art periode himpunan 2025/2026, banyak sekali perubahan ad/art karena sudah tidak relevannya dengan zamannya.",
-      type: "online"
-    },
-    {
-      id: 2,
-      tag: "#Shared With Me",
-      platform: "Google Meet",
-      date: "Senin, 8 September 2025 12:55",
-      title: "Rapat HMIF Periode 2025/2026",
-      description: "Pada rapat ini membahas tentang pengkajian ad/art periode himpunan 2025/2026, banyak sekali perubahan ad/art karena sudah tidak relevannya dengan zamannya.",
-      type: "online"
-    },
-    {
-      id: 3,
-      tag: "#My Meeting",
-      platform: "Google Meet",
-      date: "Senin, 8 September 2025 12:55",
-      title: "Rapat HMIF Periode 2025/2026",
-      description: "Pada rapat ini membahas tentang pengkajian ad/art periode himpunan 2025/2026, banyak sekali perubahan ad/art karena sudah tidak relevannya dengan zamannya.",
-      type: "online"
-    },
-    {
-      id: 4,
-      tag: "#Shared With Me",
-      platform: "Google Meet",
-      date: "Senin, 8 September 2025 12:55",
-      title: "Rapat HMIF Periode 2025/2026",
-      description: "Pada rapat ini membahas tentang pengkajian ad/art periode himpunan 2025/2026, banyak sekali perubahan ad/art karena sudah tidak relevannya dengan zamannya.",
-      type: "online"
-    }
-  ]
+interface Meeting {
+  _id: string
+  title: string
+  description?: string
+  platform: string
+  status: string
+  duration?: number
+  createdAt: string
+  type?: string
+}
 
 export default function Page() {
   const [isOnlineMeetingOpen, setIsOnlineMeetingOpen] = useState(false)
   const [isRealtimeMeetingOpen, setIsRealtimeMeetingOpen] = useState(false)
+  const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [isLoadingMeetings, setIsLoadingMeetings] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+  
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const { api, isReady } = useApiWithAuth()
+  const router = useRouter()
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push("/login")
+    }
+  }, [authLoading, isAuthenticated, router])
+
+  // Fetch meetings on mount
+  useEffect(() => {
+    const fetchMeetings = async () => {
+      try {
+        setIsLoadingMeetings(true)
+        const response = await api.getMeetings({ limit: 10 })
+        setMeetings(response.meetings || [])
+      } catch (error) {
+        console.error("Error fetching meetings:", error)
+        setMeetings([])
+      } finally {
+        setIsLoadingMeetings(false)
+      }
+    }
+
+    // Only fetch when auth is done AND we have a token
+    if (!authLoading) {
+      if (isReady) {
+        fetchMeetings()
+      } else {
+        // No token available, stop loading
+        setIsLoadingMeetings(false)
+      }
+    }
+  }, [isReady, authLoading])
+
+  // Format meeting data for MeetingCard
+  const formatMeetingForCard = (meeting: Meeting) => ({
+    id: meeting._id,
+    tag: "#My Meeting",
+    platform: meeting.platform || "Google Meet",
+    date: new Date(meeting.createdAt).toLocaleDateString('id-ID', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    title: meeting.title || "Untitled Meeting",
+    description: meeting.description || "Meeting sedang diproses...",
+    type: meeting.type || "online",
+    status: meeting.status
+  })
+
+  // Filter meetings by search
+  const filteredMeetings = meetings.filter(meeting => 
+    meeting.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    meeting.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   return (
     <SidebarProvider
@@ -108,7 +145,7 @@ export default function Page() {
             <div className="flex flex-col gap-6 py-6">
               {/* Top welcome */}
               <div className="px-4 lg:px-6">
-                <h2 className="text-3xl font-bold text-[#2b1152]">Welcome Abroad, Raj</h2>
+                <h2 className="text-3xl font-bold text-[#2b1152]">Welcome Abroad, {user?.name?.split(' ')[0] || 'User'}</h2>
                 <p className="text-sm text-muted-foreground">Notu Siap Untuk Menjadi Asisten Anda😊</p>
               </div>
 
@@ -122,6 +159,10 @@ export default function Page() {
                         setIsOnlineMeetingOpen(true)
                       } else if (action.title === "Take Notes From Realtime Meeting") {
                         setIsRealtimeMeetingOpen(true)
+                      } else if (action.title === "Take Notes From Upload File") {
+                        router.push("/dashboard/uploads")
+                      } else if (action.title === "Analytics Your Meeting") {
+                        router.push("/dashboard/analytics")
                       }
                     }
 
@@ -163,6 +204,8 @@ export default function Page() {
                     <Input 
                       placeholder="Search Notes.." 
                       className="pl-10 pr-4"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
                   <Button variant="outline" className="flex items-center gap-2 bg-background-2 border-border">
@@ -195,11 +238,22 @@ export default function Page() {
                 </div>
 
                 {/* Meeting Cards Grid */}
-                <div className="grid gap-4 md:grid-cols-2">
-                  {meetingHistory.map((meeting) => (
-                    <MeetingCard key={meeting.id} data={meeting} />
-                  ))}
-                </div>
+                {isLoadingMeetings ? (
+                  <div className="flex items-center justify-center py-12">
+                    <IconLoader2 className="h-8 w-8 animate-spin text-[#6b4eff]" />
+                  </div>
+                ) : filteredMeetings.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <p className="text-lg font-medium text-gray-900">Belum ada meeting</p>
+                    <p className="text-sm text-gray-500 mt-1">Mulai dengan membuat meeting baru</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {filteredMeetings.map((meeting) => (
+                      <MeetingCard key={meeting._id} data={formatMeetingForCard(meeting)} />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -9,8 +9,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { IconPlus, IconCalendar, IconUser, IconClock, IconCheck, IconDots, IconDownload, IconShare2, IconLink, IconPencil } from "@tabler/icons-react"
+import { IconPlus, IconCalendar, IconUser, IconClock, IconCheck, IconDots, IconDownload, IconShare2, IconLink, IconPencil, IconLoader2 } from "@tabler/icons-react"
 import * as React from "react"
+import { useCallback, useEffect, useState, useRef, useMemo } from "react"
 import {
   DndContext,
   DragEndEvent,
@@ -33,9 +34,12 @@ import * as Dialog from "@radix-ui/react-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge as UIBadge } from "@/components/ui/badge"
 import { IconPlus as PlusIcon } from "@tabler/icons-react"
+import { useApiWithAuth } from "@/hooks/use-auth"
+import { toast } from "sonner"
 
 type Task = {
   id: string
+  _id?: string
   title: string
   description: string
   assignee: string
@@ -44,127 +48,87 @@ type Task = {
   labelIds?: string[]
   progress?: number
   completedDate?: string
+  status?: string
+  priority?: string
+  order?: number
 }
 
 type ColumnId = "todo" | "inProgress" | "done"
 
+// Map backend status to column id
+const statusToColumn: Record<string, ColumnId> = {
+  'todo': 'todo',
+  'in-progress': 'inProgress',
+  'done': 'done'
+}
+
+const columnToStatus: Record<ColumnId, string> = {
+  'todo': 'todo',
+  'inProgress': 'in-progress',
+  'done': 'done'
+}
+
 export default function KanbanPage() {
-  const initialTodo: Task[] = [
-    {
-      id: "1",
-      title: "Review Q4 performance metrics",
-      description: "Analyze quarterly results and prepare summary report",
-      assignee: "Sarah Wilson",
-      dueDate: "Dec 25, 2024",
-      tags: ["Analytics", "Reporting"]
-    },
-    {
-      id: "2",
-      title: "Update project documentation",
-      description: "Revise technical specifications and user guides",
-      assignee: "Mike Johnson",
-      dueDate: "Dec 28, 2024",
-      tags: ["Documentation"]
-    },
-    {
-      id: "3",
-      title: "Plan team building event",
-      description: "Organize quarterly team activity and send invitations",
-      assignee: "Emily Davis",
-      dueDate: "Jan 5, 2025",
-      tags: ["HR", "Planning"]
-    },
-    {
-      id: "4",
-      title: "Conduct user research interviews",
-      description: "Schedule and conduct 5 user interviews for product feedback",
-      assignee: "David Brown",
-      dueDate: "Dec 30, 2024",
-      tags: ["Research", "UX"]
-    }
-  ]
+  const { api, isReady } = useApiWithAuth()
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
 
-  const initialInProgress: Task[] = [
-    {
-      id: "5",
-      title: "Implement new dashboard features",
-      description: "Add analytics widgets and improve data visualization",
-      assignee: "John Doe",
-      dueDate: "Dec 22, 2024",
-      tags: ["Development", "Frontend"],
-      progress: 65
-    },
-    {
-      id: "6",
-      title: "Design mobile app interface",
-      description: "Create wireframes and mockups for mobile version",
-      assignee: "Lisa Chen",
-      dueDate: "Dec 26, 2024",
-      tags: ["Design", "Mobile"],
-      progress: 40
-    },
-    {
-      id: "7",
-      title: "Write API documentation",
-      description: "Document all endpoints and provide code examples",
-      assignee: "Alex Rodriguez",
-      dueDate: "Dec 24, 2024",
-      tags: ["API", "Documentation"],
-      progress: 80
-    }
-  ]
-
-  const initialDone: Task[] = [
-    {
-      id: "8",
-      title: "Setup CI/CD pipeline",
-      description: "Configure automated testing and deployment",
-      assignee: "Tom Wilson",
-      dueDate: "Dec 20, 2024",
-      tags: ["DevOps", "CI/CD"],
-      completedDate: "Dec 18, 2024"
-    },
-    {
-      id: "9",
-      title: "Conduct security audit",
-      description: "Review codebase for security vulnerabilities",
-      assignee: "Security Team",
-      dueDate: "Dec 15, 2024",
-      tags: ["Security", "Audit"],
-      completedDate: "Dec 14, 2024"
-    },
-    {
-      id: "10",
-      title: "Update privacy policy",
-      description: "Revise privacy policy to comply with new regulations",
-      assignee: "Legal Team",
-      dueDate: "Dec 12, 2024",
-      tags: ["Legal", "Compliance"],
-      completedDate: "Dec 10, 2024"
-    },
-    {
-      id: "11",
-      title: "Optimize database queries",
-      description: "Improve performance of slow database operations",
-      assignee: "Database Team",
-      dueDate: "Dec 10, 2024",
-      tags: ["Database", "Performance"],
-      completedDate: "Dec 8, 2024"
-    }
-  ]
-
-  const [columns, setColumns] = React.useState<Record<ColumnId, Task[]>>({
-    todo: initialTodo,
-    inProgress: initialInProgress,
-    done: initialDone,
+  const [columns, setColumns] = useState<Record<ColumnId, Task[]>>({
+    todo: [],
+    inProgress: [],
+    done: [],
   })
 
+  // Fetch tasks from API
+  const fetchTasks = useCallback(async () => {
+    if (!isReady) return
+    
+    try {
+      setIsLoading(true)
+      const response = await api.getKanbanTasks()
+      const kanbanData = response.kanban
+      
+      // Transform backend data to local format
+      const transformTask = (task: any): Task => ({
+        id: task._id,
+        _id: task._id,
+        title: task.title,
+        description: task.description || '',
+        assignee: task.assignee || 'Unassigned',
+        dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined,
+        tags: task.tags || [],
+        status: task.status,
+        priority: task.priority,
+        order: task.order,
+        completedDate: task.status === 'done' && task.updatedAt ? 
+          new Date(task.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined
+      })
+
+      setColumns({
+        todo: (kanbanData.todo || []).map(transformTask),
+        inProgress: (kanbanData['in-progress'] || []).map(transformTask),
+        done: (kanbanData.done || []).map(transformTask),
+      })
+    } catch (error) {
+      console.error("Error fetching tasks:", error)
+      toast.error("Gagal memuat tasks")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isReady, api])
+
+  useEffect(() => {
+    if (isReady) {
+      fetchTasks()
+    }
+  }, [isReady, fetchTasks])
+
   // Avoid hydration mismatch by rendering DnD subtree only on client
-  const [mounted, setMounted] = React.useState(false)
-  React.useEffect(() => setMounted(true), [])
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   // Members invited to the project (demo data)
-  const invitedMembers = React.useMemo(() => [
+  const invitedMembers = useMemo(() => [
     "John Doe",
     "Sarah Wilson",
     "Mike Johnson",
@@ -174,12 +138,12 @@ export default function KanbanPage() {
 
   // Labels like Trello
   type BoardLabel = { id: string; name: string; color: string }
-  const [labels, setLabels] = React.useState<BoardLabel[]>([
+  const [labels, setLabels] = useState<BoardLabel[]>([
     { id: "lbl-1", name: "FRONTEND", color: "#00F0C8" },
     { id: "lbl-2", name: "BACKEND", color: "#9B26F0" },
     { id: "lbl-3", name: "UI/UX", color: "#28C2FF" },
   ])
-  const randomLabelColor = React.useCallback(() => {
+  const randomLabelColor = useCallback(() => {
     const hue = Math.floor(Math.random() * 360)
     return `hsl(${hue} 90% 55%)`
   }, [])
@@ -263,8 +227,8 @@ export default function KanbanPage() {
     )
   }
 
-  const activeTaskRef = React.useRef<Task | null>(null)
-  const [activeId, setActiveId] = React.useState<string | null>(null)
+  const activeTaskRef = useRef<Task | null>(null)
+  const [activeId, setActiveId] = useState<string | null>(null)
 
   const onDragStart = (activeId: string) => {
     const task = Object.values(columns).flat().find((t) => t.id === activeId) || null
@@ -272,7 +236,7 @@ export default function KanbanPage() {
     setActiveId(activeId)
   }
 
-  const onDragEnd = (event: DragEndEvent) => {
+  const onDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     if (!over) return
     if (active.id === over.id) return
@@ -301,12 +265,26 @@ export default function KanbanPage() {
     const toIndex = overIndex >= 0 ? overIndex : destItems.length
     destItems.splice(toIndex, 0, moved)
 
-    setColumns((prev) => ({
-      ...prev,
+    const newColumns = {
+      ...columns,
       [sourceColumn!]: sourceColumn === destColumn ? destItems : sourceItems,
       [destColumn!]: destItems,
-    }))
+    }
+    
+    setColumns(newColumns)
     setActiveId(null)
+
+    // Sync with backend if task moved to different column
+    if (sourceColumn !== destColumn && isReady && moved._id) {
+      try {
+        await api.updateTask(moved._id, { status: columnToStatus[destColumn] })
+      } catch (error) {
+        console.error("Error updating task status:", error)
+        toast.error("Gagal mengupdate status task")
+        // Revert on error
+        fetchTasks()
+      }
+    }
   }
 
   // Live reordering across columns for Trello-like smoothness
@@ -357,8 +335,8 @@ export default function KanbanPage() {
   }
 
   // Add Task form state
-  const [openAdd, setOpenAdd] = React.useState(false)
-  const [newTask, setNewTask] = React.useState<Pick<Task, "title" | "description" | "assignee" | "dueDate" | "labelIds">>({
+  const [openAdd, setOpenAdd] = useState(false)
+  const [newTask, setNewTask] = useState<Pick<Task, "title" | "description" | "assignee" | "dueDate" | "labelIds">>({
     title: "",
     description: "",
     assignee: "",
@@ -366,29 +344,57 @@ export default function KanbanPage() {
     labelIds: [],
   })
 
-  const createTask = () => {
-    const task: Task = {
-      id: String(Date.now()),
-      title: newTask.title || "New Task",
-      description: newTask.description || "",
-      assignee: newTask.assignee || "Unassigned",
-      dueDate: newTask.dueDate,
-      labelIds: newTask.labelIds || [],
+  const createTask = async () => {
+    if (!isReady) {
+      toast.error("Silahkan login terlebih dahulu")
+      return
     }
-    setColumns((prev) => ({ ...prev, todo: [task, ...prev.todo] }))
-    setOpenAdd(false)
-    setNewTask({ title: "", description: "", assignee: "", dueDate: "", labelIds: [] })
+    
+    setIsSaving(true)
+    try {
+      const response = await api.createTask({
+        title: newTask.title || "New Task",
+        description: newTask.description || "",
+        assignee: newTask.assignee || "Unassigned",
+        dueDate: newTask.dueDate || undefined,
+        tags: newTask.labelIds?.map(id => labels.find(l => l.id === id)?.name || '').filter(Boolean),
+        status: 'todo',
+      })
+      
+      const createdTask: Task = {
+        id: response.task._id,
+        _id: response.task._id,
+        title: response.task.title,
+        description: response.task.description || '',
+        assignee: response.task.assignee || 'Unassigned',
+        dueDate: response.task.dueDate ? new Date(response.task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined,
+        tags: response.task.tags || [],
+        labelIds: newTask.labelIds || [],
+      }
+      
+      setColumns((prev) => ({ ...prev, todo: [createdTask, ...prev.todo] }))
+      setOpenAdd(false)
+      setNewTask({ title: "", description: "", assignee: "", dueDate: "", labelIds: [] })
+      toast.success("Task berhasil dibuat")
+    } catch (error) {
+      console.error("Error creating task:", error)
+      toast.error("Gagal membuat task")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Edit modal state
-  const [editOpen, setEditOpen] = React.useState(false)
-  const [editing, setEditing] = React.useState<Task | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editing, setEditing] = useState<Task | null>(null)
   const openEdit = (task: Task) => {
     setEditing(task)
     setEditOpen(true)
   }
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editing) return
+    
+    // Optimistic update
     const update = (items: Task[]) => items.map((t) => (t.id === editing.id ? editing : t))
     setColumns((prev) => ({
       todo: update(prev.todo),
@@ -396,6 +402,46 @@ export default function KanbanPage() {
       done: update(prev.done),
     }))
     setEditOpen(false)
+    
+    // Sync with backend
+    if (isReady && editing._id) {
+      try {
+        await api.updateTask(editing._id, {
+          title: editing.title,
+          description: editing.description,
+          assignee: editing.assignee,
+          dueDate: editing.dueDate,
+          tags: editing.tags,
+        })
+        toast.success("Task berhasil diupdate")
+      } catch (error) {
+        console.error("Error updating task:", error)
+        toast.error("Gagal mengupdate task")
+        fetchTasks() // Revert on error
+      }
+    }
+  }
+
+  // Delete task
+  const deleteTask = async (taskId: string) => {
+    if (!isReady) return
+    
+    // Optimistic update
+    setColumns((prev) => ({
+      todo: prev.todo.filter(t => t.id !== taskId),
+      inProgress: prev.inProgress.filter(t => t.id !== taskId),
+      done: prev.done.filter(t => t.id !== taskId),
+    }))
+    setEditOpen(false)
+    
+    try {
+      await api.deleteTask(taskId)
+      toast.success("Task berhasil dihapus")
+    } catch (error) {
+      console.error("Error deleting task:", error)
+      toast.error("Gagal menghapus task")
+      fetchTasks() // Revert on error
+    }
   }
 
   // Reusable form content
